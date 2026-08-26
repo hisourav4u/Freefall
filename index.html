@@ -73,23 +73,33 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
   function ensureAC(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==="suspended") AC.resume(); return AC; }
   function startScream(){
     if(!soundOn) return; var c=ensureAC(); if(!c||scream) return;
-    var osc=c.createOscillator(); osc.type="sawtooth"; osc.frequency.value=360;
-    var vib=c.createOscillator(); vib.type="sine"; vib.frequency.value=11;
-    var vibG=c.createGain(); vibG.gain.value=32; vib.connect(vibG); vibG.connect(osc.frequency);
-    var trem=c.createOscillator(); trem.type="sine"; trem.frequency.value=6.5;
-    var tremG=c.createGain(); tremG.gain.value=0.02;
-    var bp=c.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=1150; bp.Q.value=6.5;
+    var osc=c.createOscillator(); osc.type="sawtooth"; osc.frequency.value=500;
+    var osc2=c.createOscillator(); osc2.type="sawtooth"; osc2.frequency.value=750; // a fifth up — shriek
+    var o2g=c.createGain(); o2g.gain.value=0.3;
+    var vib=c.createOscillator(); vib.type="sine"; vib.frequency.value=13;
+    var vibG=c.createGain(); vibG.gain.value=55; vib.connect(vibG); vibG.connect(osc.frequency); vibG.connect(osc2.frequency);
+    var trem=c.createOscillator(); trem.type="sine"; trem.frequency.value=7.5;
+    var tremG=c.createGain(); tremG.gain.value=0.05;
+    var bp=c.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=1450; bp.Q.value=5;
     var g=c.createGain(); g.gain.value=0.0001;
     trem.connect(tremG); tremG.connect(g.gain);
-    osc.connect(bp); bp.connect(g); g.connect(c.destination);
-    osc.start(); vib.start(); trem.start();
-    g.gain.setTargetAtTime(0.05, c.currentTime, 0.06);
-    scream={osc:osc,vib:vib,trem:trem,g:g};
+    osc.connect(bp); osc2.connect(o2g); o2g.connect(bp); bp.connect(g); g.connect(c.destination);
+    osc.start(); osc2.start(); vib.start(); trem.start();
+    g.gain.setTargetAtTime(0.17, c.currentTime, 0.05);   // far more prominent
+    scream={osc:osc,osc2:osc2,vib:vib,trem:trem,g:g};
   }
-  function updateScream(speed){ if(!scream||!AC) return; scream.osc.frequency.setTargetAtTime(320+speed*34, AC.currentTime, 0.12); }
+  function updateScream(speed){ if(!scream||!AC) return; var f=440+speed*42;
+    scream.osc.frequency.setTargetAtTime(f, AC.currentTime, 0.1);
+    scream.osc2.frequency.setTargetAtTime(f*1.5, AC.currentTime, 0.1); }
   function stopScream(){ if(!scream||!AC) return; var c=AC,n=scream; scream=null;
     n.g.gain.cancelScheduledValues(c.currentTime); n.g.gain.setTargetAtTime(0.0001,c.currentTime,0.05);
-    setTimeout(function(){ try{ n.osc.stop(); n.vib.stop(); n.trem.stop(); }catch(e){} }, 180); }
+    setTimeout(function(){ try{ n.osc.stop(); n.osc2.stop(); n.vib.stop(); n.trem.stop(); }catch(e){} }, 180); }
+  // a real spoken word on impact, via the browser's speech synthesis
+  function shout(){
+    if(!soundOn || !("speechSynthesis" in window)) return;
+    try{ var u=new SpeechSynthesisUtterance("Fuuuuuuuuck"); u.rate=0.6; u.pitch=0.55; u.volume=1;
+      window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }catch(e){}
+  }
   function impact(){
     if(!soundOn) return; var c=ensureAC(); if(!c) return;
     var o=c.createOscillator(); o.type="sine"; o.frequency.setValueAtTime(190,c.currentTime); o.frequency.exponentialRampToValueAtTime(48,c.currentTime+0.3);
@@ -137,7 +147,7 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
   function die(){
     if(S.mode!=="play") return;
     S.mode="dead"; S.shake=20; S.flash=1;
-    stopScream(); impact();
+    stopScream(); impact(); shout();
     burst(S.fx, fyPx());
     if(S.score>best){ best=S.score; try{localStorage.setItem(BEST_KEY,String(best));}catch(e){} document.getElementById("best").textContent=best; }
   }
@@ -440,7 +450,8 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
 
   document.getElementById("sound").addEventListener("click", function(){
     soundOn=!soundOn; this.textContent="sound: "+(soundOn?"on":"off");
-    if(!soundOn) stopScream(); else if(S && S.mode==="play") startScream();
+    if(!soundOn){ stopScream(); try{ window.speechSynthesis.cancel(); }catch(e){} }
+    else if(S && S.mode==="play") startScream();
   });
   (function(){ var root=document.documentElement,K="pf-theme"; try{var s=localStorage.getItem(K); if(s)root.setAttribute("data-theme",s);}catch(e){}
     document.getElementById("theme").addEventListener("click", function(){ var cur=root.getAttribute("data-theme"); if(!cur)cur=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"; var next=cur==="dark"?"light":"dark"; root.setAttribute("data-theme",next); try{localStorage.setItem(K,next);}catch(e){} }); })();
