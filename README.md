@@ -16,7 +16,9 @@ Play it: **https://souravkundu.dev/labs/freefall/**
 The chasm is a continuous function of depth: the gap meanders (layered sines) and its
 width shrinks as you descend, while the fall speed ramps up. Collision samples a few
 rows of the figure against the wall edges. Best depth is kept in `localStorage`. The
-falling scream and the impact are synthesised with the Web Audio API — no audio files.
+falling scream and the death shout are short clips (`scream.mp3`, `shout.mp3`) embedded
+as base64 and decoded via the Web Audio API, so they play under the artifact's strict
+content-security policy without any external requests; the impact thud is synthesised.
 
 ## Tech
 
