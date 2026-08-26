@@ -130,7 +130,7 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
   var S;
   function reset(){
     S={ mode:"ready", depth:0, fx:VP.W*0.5, vx:0, t:0, shake:0, flash:0, score:0,
-        trail:[], parts:[], btn:null };
+        trail:[], parts:[], critters:[], critTimer:90, btn:null };
   }
   function start(){ if(S.mode==="play") return; if(S.mode==="dead") reset(); S.mode="play"; startScream(); }
 
@@ -145,6 +145,19 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
 
   function burst(x,y){ for(var i=0;i<34;i++){ var a=Math.random()*6.28,sp=Math.random()*5+1.5;
     S.parts.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,dec:0.02+Math.random()*0.02,size:Math.random()*3+1.4}); } }
+
+  // bats swoop across to break focus — harmless, but they fly right through your sightline
+  function spawnCritter(){
+    var fromLeft=Math.random()<0.5;
+    S.critters.push({
+      x: fromLeft ? -30 : VP.W+30,
+      baseY: 44 + Math.random()*(VP.H-130),
+      vx: (fromLeft?1:-1)*(1.6+Math.random()*2.4),
+      wobAmp: 8+Math.random()*24, wobFreq: 0.05+Math.random()*0.06, phase: Math.random()*6.28,
+      flap: Math.random()*6.28, flapSpd: 0.4+Math.random()*0.3,
+      size: 22+Math.random()*16, t:0
+    });
+  }
 
   // ---- input ----
   var keyL=false, keyR=false, ptrActive=false, ptrDir=0;
@@ -186,6 +199,11 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
     S.depth += sp*dt;
     S.score = Math.floor(S.depth/12);
     updateScream(sp);
+
+    // distractions: bats swooping across at random times (more often the deeper you go)
+    S.critTimer -= dt;
+    if(S.critTimer<=0){ spawnCritter(); S.critTimer = Math.max(35, 100 - S.depth*0.006) + Math.random()*70; }
+    for(var ci=S.critters.length-1;ci>=0;ci--){ var cr=S.critters[ci]; cr.x+=cr.vx*dt; cr.t+=dt; cr.flap+=cr.flapSpd*dt; if(cr.x<-44||cr.x>VP.W+44) S.critters.splice(ci,1); }
 
     var dir=steer();
     S.vx += dir*0.95*dt;
@@ -260,6 +278,35 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
     ctx.beginPath(); for(var y3=0;y3<=H;y3+=step){ var e=wallEdges(y3); (y3===0?ctx.moveTo:ctx.lineTo).call(ctx, e[0], y3); } ctx.stroke();
     ctx.beginPath(); for(var y4=0;y4<=H;y4+=step){ var e2=wallEdges(y4); (y4===0?ctx.moveTo:ctx.lineTo).call(ctx, e2[1], y4); } ctx.stroke();
     ctx.shadowBlur=0;
+  }
+
+  function drawBat(x,y,s,flap,dk){
+    var flapY=Math.sin(flap)*s*0.4;
+    ctx.save(); ctx.translate(x,y);
+    ctx.fillStyle=dk?"#0d131c":"#26303c";
+    ctx.beginPath();
+    ctx.moveTo(-s,-flapY);
+    ctx.quadraticCurveTo(-s*0.55,-flapY-s*0.3,-s*0.28,-s*0.05);
+    ctx.quadraticCurveTo(-s*0.14,-s*0.5,0,-s*0.22);
+    ctx.quadraticCurveTo(s*0.14,-s*0.5,s*0.28,-s*0.05);
+    ctx.quadraticCurveTo(s*0.55,-flapY-s*0.3,s,-flapY);
+    ctx.quadraticCurveTo(s*0.62,s*0.12-flapY*0.4,s*0.5,s*0.3);
+    ctx.quadraticCurveTo(s*0.42,s*0.06,s*0.3,s*0.28);
+    ctx.quadraticCurveTo(s*0.16,s*0.04,0,s*0.32);
+    ctx.quadraticCurveTo(-s*0.16,s*0.04,-s*0.3,s*0.28);
+    ctx.quadraticCurveTo(-s*0.42,s*0.06,-s*0.5,s*0.3);
+    ctx.quadraticCurveTo(-s*0.62,s*0.12-flapY*0.4,-s,-flapY);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle=dk?"#ff5a4d":"#c0392b"; ctx.shadowColor="#ff5a4d"; ctx.shadowBlur=6;
+    ctx.beginPath(); ctx.arc(-s*0.09,-s*0.16,1.3,0,6.28); ctx.arc(s*0.09,-s*0.16,1.3,0,6.28); ctx.fill();
+    ctx.shadowBlur=0; ctx.restore();
+  }
+  function drawCritters(){
+    var dk=dark();
+    for(var i=0;i<S.critters.length;i++){ var cr=S.critters[i];
+      var y=cr.baseY + Math.sin(cr.t*cr.wobFreq + cr.phase)*cr.wobAmp;
+      drawBat(cr.x, y, cr.size, cr.flap, dk);
+    }
   }
 
   function drawFaller(){
@@ -379,7 +426,7 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
     update(dt);
     ctx.save();
     if(S.shake) ctx.translate((Math.random()-0.5)*S.shake,(Math.random()-0.5)*S.shake);
-    drawBackground(); drawWalls(); drawSpeedLines(); drawFaller();
+    drawBackground(); drawWalls(); drawSpeedLines(); drawFaller(); drawCritters();
     ctx.restore();
     if(S.flash>0.02){ ctx.save(); ctx.globalAlpha=Math.min(0.55,S.flash*0.55); ctx.fillStyle="#ff5555"; ctx.fillRect(0,0,VP.W,VP.H); ctx.restore(); }
     drawParticles(); drawHUD(); overlay();
