@@ -233,9 +233,9 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
     for(var ci=S.critters.length-1;ci>=0;ci--){ var cr=S.critters[ci]; cr.x+=cr.vx*dt; cr.t+=dt; cr.flap+=cr.flapSpd*dt; if(cr.x<-44||cr.x>VP.W+44) S.critters.splice(ci,1); }
 
     var dir=steer();
-    S.vx += dir*0.95*dt;
+    S.vx += dir*1.3*dt;
     S.vx *= Math.pow(0.80, dt);
-    if(S.vx>9.5) S.vx=9.5; if(S.vx<-9.5) S.vx=-9.5;
+    if(S.vx>12.5) S.vx=12.5; if(S.vx<-12.5) S.vx=-12.5;
     S.fx += S.vx*dt;
     if(S.fx<6){ S.fx=6; S.vx=0; } if(S.fx>VP.W-6){ S.fx=VP.W-6; S.vx=0; }
 
