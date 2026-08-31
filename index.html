@@ -63,6 +63,7 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
 (function(){
   "use strict";
   var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var BALL_R = 21;  // ball radius (considerable); drives size, hitbox and edge clamp
   var cv=document.getElementById("c"), ctx=cv.getContext("2d");
   var BEST_KEY="freefall-best";
   var best=0; try{ best=parseInt(localStorage.getItem(BEST_KEY)||"0",10)||0; }catch(e){}
@@ -157,7 +158,7 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
   var S;
   function reset(){
     S={ mode:"ready", depth:0, fx:VP.W*0.5, vx:0, t:0, shake:0, flash:0, score:0,
-        trail:[], parts:[], critters:[], critTimer:90, btn:null };
+        trail:[], parts:[], critters:[], critTimer:90, roll:0, btn:null };
   }
   function start(){ if(S.mode==="play") return; if(S.mode==="dead") reset(); S.mode="play"; startScream(); }
 
@@ -237,13 +238,14 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
     S.vx *= Math.pow(0.78, dt);
     if(S.vx>17) S.vx=17; if(S.vx<-17) S.vx=-17;
     S.fx += S.vx*dt;
-    if(S.fx<6){ S.fx=6; S.vx=0; } if(S.fx>VP.W-6){ S.fx=VP.W-6; S.vx=0; }
+    if(S.fx<BALL_R){ S.fx=BALL_R; S.vx=0; } if(S.fx>VP.W-BALL_R){ S.fx=VP.W-BALL_R; S.vx=0; }
+    S.roll += (S.vx*0.06 + 0.03)*dt;   // rolls with sideways motion + a little base spin
 
     // trail
     S.trail.push({x:S.fx,y:fyPx()}); if(S.trail.length>14) S.trail.shift();
 
     // collision: sample a few body rows
-    var fy=fyPx(), hw=11, rows=[-13,0,15];
+    var fy=fyPx(), hw=BALL_R-3, rows=[-BALL_R*0.6,0,BALL_R*0.6];
     for(var r=0;r<rows.length;r++){
       var d=S.depth + rows[r];
       var c=gapCenter(d), w=gapWidth(d), left=c-w/2, right=c+w/2;
@@ -340,59 +342,38 @@ footer a{color:var(--mute); text-decoration:none} footer a:hover{color:var(--acc
     var fx=S.fx, fy=fyPx(), dk=dark();
     // trail
     for(var i=0;i<S.trail.length;i++){ var t=S.trail[i], a=i/S.trail.length;
-      ctx.globalAlpha=a*0.26; ctx.fillStyle=dk?"#ffce8a":"#c9873a";
-      ctx.beginPath(); ctx.arc(t.x, t.y+(S.trail.length-i)*1.5, 3*a+1, 0, 6.28); ctx.fill(); }
+      ctx.globalAlpha=a*0.22; ctx.fillStyle=dk?"#ff9a6a":"#c9603a";
+      ctx.beginPath(); ctx.arc(t.x, t.y+(S.trail.length-i)*1.6, BALL_R*0.5*a+1, 0, 6.28); ctx.fill(); }
     ctx.globalAlpha=1;
-    drawHuman(fx, fy, S.vx, S.t, S.mode==="play");
+    drawBall(fx, fy);
   }
 
-  // a two-segment limb (with dark outline underneath) ending in a hand/foot
-  function limb(x0,y0,a1,l1,a2,l2,w,col,tip,tipR){
-    var x1=x0+Math.cos(a1)*l1, y1=y0+Math.sin(a1)*l1;
-    var x2=x1+Math.cos(a2)*l2, y2=y1+Math.sin(a2)*l2;
-    ctx.lineCap="round"; ctx.lineJoin="round";
-    ctx.strokeStyle="rgba(8,12,20,.85)"; ctx.lineWidth=w+2.4;
-    ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-    ctx.strokeStyle=col; ctx.lineWidth=w;
-    ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-    if(tip){ ctx.fillStyle=tip; ctx.beginPath(); ctx.arc(x2,y2,tipR||2.4,0,6.28); ctx.fill(); }
-  }
-
-  function drawHuman(fx,fy,vx,t,alive){
-    // a steady skydiver: spread-eagle, only a gentle sway + steering lean (no flapping)
-    var sway=Math.sin(t*0.45)*0.05;
-    var lean=Math.max(-0.4,Math.min(0.4,vx*0.04));
-    var skin="#f0c49a", skinL="#f8d6b2", shirt="#ff7a45", pants="#3f7bd6", hair="#241812", shoe="#171b22";
-    ctx.save(); ctx.translate(fx,fy); ctx.rotate(lean*0.45);
-
-    // soft halo so the figure reads against the rock
-    var gl=ctx.createRadialGradient(0,-2,3,0,-2,32);
-    gl.addColorStop(0,"rgba(255,180,84,.18)"); gl.addColorStop(1,"rgba(255,180,84,0)");
-    ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(0,-2,32,0,6.28); ctx.fill();
-
-    // legs in an X (behind torso)
-    limb(-3,8, 2.02+sway, 10, 2.20+sway, 9, 6.5, pants, shoe, 3.6);
-    limb( 3,8, 1.12-sway, 10, 0.94-sway, 9, 6.5, pants, shoe, 3.6);
-    // arms out to the sides, slightly up — steady spread-eagle
-    limb(-5,-9, 3.48+sway, 9, 3.60+sway, 8, 5.8, shirt, skin, 3.2);
-    limb( 5,-9, -0.34-sway, 9, -0.46-sway, 8, 5.8, shirt, skin, 3.2);
-
-    // torso: dark outline + shirt + pants
-    ctx.fillStyle="rgba(8,12,20,.9)"; roundRect(-7.5,-13,15,23,6.5); ctx.fill();
-    ctx.fillStyle=shirt; roundRect(-6,-12,12,16,5.5); ctx.fill();
-    ctx.fillStyle="rgba(0,0,0,.12)"; roundRect(-6,-12,6,16,5.5); ctx.fill(); // soft left-side shade
-    ctx.fillStyle=pants; roundRect(-6,2.5,12,7,3.5); ctx.fill();
-
-    // head
-    var hy=-19;
-    ctx.fillStyle="rgba(8,12,20,.9)"; ctx.beginPath(); ctx.arc(0,hy,7,0,6.28); ctx.fill();
-    ctx.fillStyle=skinL; ctx.beginPath(); ctx.arc(0,hy,6.2,0,6.28); ctx.fill();
-    ctx.fillStyle=hair; ctx.beginPath(); ctx.arc(0,hy,6.4,Math.PI*1.02,Math.PI*1.98); ctx.fill();
-    // face: eyes + open (screaming) mouth
-    ctx.fillStyle="#243040"; ctx.beginPath(); ctx.arc(-2.2,hy,1.0,0,6.28); ctx.arc(2.2,hy,1.0,0,6.28); ctx.fill();
-    ctx.fillStyle=alive?"#5a2320":"#241010";
-    ctx.beginPath(); ctx.ellipse(0,hy+3.6, alive?2.0:1.4, alive?2.8:1.1, 0, 0, 6.28); ctx.fill();
-
+  function drawBall(fx,fy){
+    var R=BALL_R, dk=dark();
+    // squash/stretch with sideways speed for a little juice
+    var s=Math.min(0.16, Math.abs(S.vx)*0.007), sx=1+s, sy=1-s*0.7;
+    ctx.save(); ctx.translate(fx,fy); ctx.scale(sx,sy);
+    // soft halo
+    var gl=ctx.createRadialGradient(0,0,R*0.4,0,0,R*2.1);
+    gl.addColorStop(0,"rgba(255,120,70,.22)"); gl.addColorStop(1,"rgba(255,120,70,0)");
+    ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(0,0,R*2.1,0,6.28); ctx.fill();
+    // sphere body: light top-left -> deep edge
+    var g=ctx.createRadialGradient(-R*0.35,-R*0.4,R*0.12, 0,0,R);
+    g.addColorStop(0, dk?"#ffd3ab":"#ffe2c4"); g.addColorStop(0.45, dk?"#ef5a37":"#e8542f");
+    g.addColorStop(1, dk?"#7c2414":"#8a2a17");
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,R,0,6.28); ctx.fill();
+    // rotating seams so it reads as rolling
+    ctx.save(); ctx.beginPath(); ctx.arc(0,0,R,0,6.28); ctx.clip(); ctx.rotate(S.roll);
+    ctx.strokeStyle="rgba(60,15,8,.5)"; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.ellipse(0,0,R*0.98,R*0.42,0,0,6.28); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0,0,R*0.42,R*0.98,0,0,6.28); ctx.stroke();
+    ctx.restore();
+    // specular highlight
+    ctx.fillStyle="rgba(255,255,255,.55)";
+    ctx.beginPath(); ctx.ellipse(-R*0.34,-R*0.4,R*0.24,R*0.15,-0.6,0,6.28); ctx.fill();
+    // rim
+    ctx.strokeStyle=dk?"rgba(255,180,84,.35)":"rgba(120,50,20,.4)"; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(0,0,R-0.5,0,6.28); ctx.stroke();
     ctx.restore();
   }
 
